@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Diffie‑Hellman mit Farben</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .color-box{display:inline-block;width:40px;height:40px;border:1px solid #333;border-radius:8px;margin-left:10px;vertical-align:middle}
+    .hidden{display:none}
+    .match{background:#d4edda;border:1px solid #28a745}
+    .mismatch{background:#f8d7da;border:1px solid #dc3545}
+    .small-text{font-size:.85rem;color:#555}
+  </style>
+</head>
+<body class="bg-light">
+<div class="container py-5">
+  <h2 class="text-center mb-4">🔐 Diffie‑Hellman mit Farben</h2>
+  <!-- Schritt 1 -->
+  <div class="card mb-4"><div class="card-body">
+      <h5>1. Basisfarbe wählen</h5>
+      <div class="input-group mb-3">
+        <input type="color" id="basePicker" class="form-control form-control-color" value="#ffcc00">
+        <input type="text"  id="baseHex"    class="form-control"           value="#ffcc00">
+        <button class="btn btn-primary" id="setBaseBtn">🎨 Basis übernehmen</button>
+      </div>
+      <div id="baseResult" class="text-success"></div>
+  </div></div>
+
+  <!-- Schritt 2 -->
+  <div class="card mb-4 hidden" id="step2"><div class="card-body">
+      <h5>2. Geheimfarben wählen und öffentliche Mischfarbe bilden</h5>
+      <div class="row">
+        <div class="col-md-6">
+          <label>Alice geheim</label>
+          <input type="color" id="aliceColor" class="form-control form-control-color mb-2" value="#0000ff">
+          <input type="text"  id="aliceHex"   class="form-control mb-2"           value="#0000ff">
+          <button class="btn btn-outline-dark mb-2" id="previewAlice">🔍 Mischfarbe berechnen</button>
+          <p>Mischfarbe: <span id="aliceMixLabel">---</span><span class="color-box" id="aliceMixBox"></span></p>
+          <p class="small-text" id="aliceMixExplain"></p>
+        </div>
+        <div class="col-md-6">
+          <label>Bob geheim</label>
+          <input type="color" id="bobColor" class="form-control form-control-color mb-2" value="#ff0000">
+          <input type="text"  id="bobHex"   class="form-control mb-2"           value="#ff0000">
+          <button class="btn btn-outline-dark mb-2" id="previewBob">🔍 Mischfarbe berechnen</button>
+          <p>Mischfarbe: <span id="bobMixLabel">---</span><span class="color-box" id="bobMixBox"></span></p>
+          <p class="small-text" id="bobMixExplain"></p>
+        </div>
+      </div>
+  </div></div>
+
+  <!-- Schritt 3 -->
+  <div class="card mb-4 hidden" id="step3"><div class="card-body">
+      <h5>3. Austausch der Mischfarben</h5>
+      <div class="row">
+        <!-- Bob sendet an Alice (links) -->
+        <div class="col-md-6">
+          <p><strong>Bob → Alice</strong></p>
+          <p>Gesendet: <strong id="sendFromBobText">---</strong><span class="color-box" id="sendFromBobBox"></span></p>
+          <p class="small-text" id="explainBobSend"></p>
+        </div>
+        <!-- Alice sendet an Bob (rechts) -->
+        <div class="col-md-6">
+          <p><strong>Alice → Bob</strong></p>
+          <p>Gesendet: <strong id="sendFromAliceText">---</strong><span class="color-box" id="sendFromAliceBox"></span></p>
+          <p class="small-text" id="explainAliceSend"></p>
+        </div>
+      </div>
+      <p class="small-text mt-3">Jeder mischt <strong>Basisfarbe + eigene Geheimfarbe</strong> → öffentliche Mischfarbe, die verschickt wird.</p>
+      <div class="row mt-3">
+        <div class="col-md-6 text-center">
+          <div>🎨 <strong>Alice:</strong></div>
+          <div class="color-box" id="diagramBaseAlice"></div> + <div class="color-box" id="diagramSecretAlice"></div> → <div class="color-box" id="diagramMixAlice"></div><br><small>Mischung Basis + Geheim</small>
+        </div>
+        <div class="col-md-6 text-center">
+          <div>🎨 <strong>Bob:</strong></div>
+          <div class="color-box" id="diagramBaseBob"></div> + <div class="color-box" id="diagramSecretBob"></div> → <div class="color-box" id="diagramMixBob"></div><br><small>Mischung Basis + Geheim</small>
+        </div>
+      </div>
+      <button class="btn btn-success mt-3" id="deriveBtn">🔐 Gemeinsamen Schlüssel berechnen</button>
+  </div></div>
+
+  <!-- Schritt 4 -->
+  <div class="card mb-4 hidden" id="step4"><div class="card-body">
+      <h5>4. Gemeinsamer Schlüssel</h5>
+      <p class="small-text">Berechnung: <code>mix(baseColor, mix(aliceSecret, bobSecret))</code></p>
+      <div class="row">
+        <div class="col-md-6">
+          <p>Alice berechnet: <strong id="aliceFinal">---</strong><span class="color-box" id="aliceFinalBox"></span></p>
+        </div>
+        <div class="col-md-6">
+          <p>Bob berechnet: <strong id="bobFinal">---</strong><span class="color-box" id="bobFinalBox"></span></p>
+        </div>
+      </div>
+      <p id="matchResult" class="fw-bold mt-3"></p>
+      <div class="row mt-3">
+        <div class="col-md-6 text-center">
+          <div>🔑 <strong>Alice:</strong></div>
+          <div class="color-box" id="diagramReceivedBob"></div> + <div class="color-box" id="diagramSecretAlice2"></div> → <div class="color-box" id="diagramFinalAlice"></div><br><small>Bob öffentl. + Alice geheim</small>
+        </div>
+        <div class="col-md-6 text-center">
+          <div>🔑 <strong>Bob:</strong></div>
+          <div class="color-box" id="diagramReceivedAlice"></div> + <div class="color-box" id="diagramSecretBob2"></div> → <div class="color-box" id="diagramFinalBob"></div><br><small>Alice öffentl. + Bob geheim</small>
+        </div>
+      </div>
+  </div></div>
+</div>
+
+<script>
+let baseColor   = "#ffcc00";
+let aliceSecret = "";
+let bobSecret   = "";
+let aliceMix    = "";
+let bobMix      = "";
+
+// Synchronisiere HEX ↔ Color Picker
+function bindSync(hexId,colorId){
+  document.getElementById(hexId).addEventListener("input",e=>{document.getElementById(colorId).value=e.target.value});
+  document.getElementById(colorId).addEventListener("input",e=>{document.getElementById(hexId).value=e.target.value});
+}
+bindSync("baseHex","basePicker");
+bindSync("aliceHex","aliceColor");
+bindSync("bobHex","bobColor");
+
+// Basis bestätigen
+setBaseBtn.onclick=()=>{
+  baseColor=document.getElementById("baseHex").value;
+  fetch("/set_base",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({baseColor})})
+  .then(r=>r.json()).then(data=>{if(data.confirmedColor){
+      baseColor=data.confirmedColor;
+      baseResult.innerText=`Basisfarbe übernommen: ${baseColor}`;
+      step2.classList.remove("hidden");
+  }});
+};
+
+// Preview‑Funktion für Alice/Bob
+function previewMix(secretHex,isAlice){
+  fetch("/mix",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({color1:baseColor,color2:secretHex})})
+  .then(r=>r.json()).then(data=>{
+      if(isAlice){
+        aliceMix=data.mixedColor; aliceSecret=secretHex;
+        aliceMixLabel.innerText=aliceMix; aliceMixBox.style.background=aliceMix;
+        aliceMixExplain.innerText=`Gemischt aus: ${data.components.join(" + ")}`;
+      }else{
+        bobMix=data.mixedColor; bobSecret=secretHex;
+        bobMixLabel.innerText=bobMix; bobMixBox.style.background=bobMix;
+        bobMixExplain.innerText=`Gemischt aus: ${data.components.join(" + ")}`;
+      }
+      updateExchangePreview();
+  });
+}
+previewAlice.onclick=()=>previewMix(document.getElementById("aliceHex").value,true);
+previewBob  .onclick=()=>previewMix(document.getElementById("bobHex").value,false);
+
+// Schritt 3 anzeigen + Diagramme
+function updateExchangePreview(){
+  if(aliceMix&&bobMix){
+    step3.classList.remove("hidden");
+    sendFromAliceText.innerText=aliceMix; sendFromAliceBox.style.background=aliceMix;
+    sendFromBobText.innerText=bobMix;     sendFromBobBox.style.background=bobMix;
+    explainAliceSend.innerText=`Alice sendet ihre Mischfarbe an Bob: ${aliceMix}`;
+    explainBobSend  .innerText=`Bob sendet seine Mischfarbe an Alice: ${bobMix}`;
+
+    // Diagramme
+    diagramBaseAlice.style.background=baseColor;
+    diagramSecretAlice.style.background=aliceSecret;
+    diagramMixAlice.style.background=aliceMix;
+    diagramBaseBob.style.background=baseColor;
+    diagramSecretBob.style.background=bobSecret;
+    diagramMixBob.style.background=bobMix;
+  }
+}
+
+// Gemeinsamen Schlüssel berechnen
+deriveBtn.onclick=()=>{
+  fetch("/final",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({baseColor,aliceSecret,bobSecret})})
+  .then(res=>res.json()).then(data=>{
+      const final=data.finalColor;
+      aliceFinal.innerText=final; aliceFinalBox.style.background=final;
+      bobFinal  .innerText=final; bobFinalBox  .style.background=final;
+
+      // Enddiagramme
+      diagramReceivedBob .style.background=bobMix;
+      diagramSecretAlice2.style.background=aliceSecret;
+      diagramFinalAlice .style.background=final;
+      diagramReceivedAlice.style.background=aliceMix;
+      diagramSecretBob2 .style.background=bobSecret;
+      diagramFinalBob   .style.background=final;
+
+      matchResult.innerText="✅ Beide Partner haben denselben Schlüssel!";
+      matchResult.className="match p-2 rounded";
+      step4.classList.remove("hidden");
+  });
+};
+</script>
+</body>
+</html>
