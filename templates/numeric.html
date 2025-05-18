@@ -2,172 +2,159 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Diffie-Hellman MITM Demo</title>
-  <!-- Bootstrap 5 -->
+  <title>Diffie‑Hellman mit Zahlen</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- GSAP -->
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.2/dist/gsap.min.js"></script>
   <style>
-    :root {
-      --color-legit: #0d6efd;
-      --color-attacker: #dc3545;
-      --color-neutral: #6c757d;
-    }
-    body { font-family: system-ui, sans-serif; background: #f8f9fa; }
-    .party-card { min-height: 160px; text-align: center; border-width: 2px; transition: border-color .3s; }
-    .secret { font-family: monospace; font-size: 1.25rem; }
-    #explanation { min-height: 100px; background: #fff3cd; border: 1px solid #ffe38b; padding: .75rem; }
-    .arrow-area { position: relative; height: 200px; }
-    svg { position: absolute; inset: 0; overflow: visible; }
-    .message { position: absolute; padding: 4px 10px; border-radius: 20px; font-family: monospace; color: #fff; pointer-events: none; }
-    .static-label { position: absolute; padding: 2px 6px; background: #e9ecef; border-radius: 12px; font-family: monospace; font-size: .85rem; }
-    .progress { cursor: pointer; height: 8px; }
+    .hidden{display:none}
+    .match{background:#d4edda;border:1px solid #28a745}
+    .mismatch{background:#f8d7da;border:1px solid #dc3545}
+    .color-box{display:inline-block;width:22px;height:22px;border:1px solid #333;border-radius:4px;margin:0 6px -5px 6px}
+    html{scroll-behavior:smooth;}
   </style>
 </head>
-<body class="container py-4">
-  <h1 class="text-center mb-4">Diffie-Hellman-Schlüsselaustausch<br><small class="text-muted">MITM-Visualisierung</small></h1>
+<body class="bg-light">
+<div class="container py-5">
+  <h2 class="text-center mb-4">🔢 Diffie‑Hellman mit Zahlen</h2>
 
-  <div class="row g-2 mb-3">
-    <div class="col-md-4">
-      <label for="paramP" class="form-label">Primzahl p</label>
-      <input type="number" id="paramP" class="form-control" value="23">
-    </div>
-    <div class="col-md-4">
-      <label for="paramG" class="form-label">Basis g</label>
-      <input type="number" id="paramG" class="form-control" value="5">
-    </div>
-    <div class="col-md-4 d-flex align-items-end">
-      <button id="applyParams" class="btn btn-outline-primary w-100">Übernehmen & Reset</button>
-    </div>
+  <div class="alert alert-info small mb-4">
+    <strong>Farb‑Analogie:</strong>
+    <span class="color-box" style="background:#ffcc00"></span> <code>p, g</code> (Basis) &nbsp;•&nbsp;
+    <span class="color-box" style="background:#0000ff"></span> <code>a</code> (Alice geheim) &nbsp;•&nbsp;
+    <span class="color-box" style="background:#ff0000"></span> <code>b</code> (Bob geheim) &nbsp;→&nbsp;
+    <span class="color-box" style="background:#7f7f00"></span> <code>A, B</code> (öffentlich) &nbsp;→&nbsp;
+    <span class="color-box" style="background:#5c5c5c"></span> <code>S</code> (gemeinsamer Schlüssel)
+    <a class="ms-2" href="/colors">Farb‑Demo öffnen</a>
   </div>
 
-  <div class="row g-4 justify-content-center">
-    <div class="col-sm-3">
-      <div id="alice" class="card party-card border-primary">
-        <div class="card-body">
-          <h4 class="card-title text-primary">Alice</h4>
-          <p class="card-text secret"><span class="label">a</span> = ?</p>
-        </div>
+  <!-- Schritt 1 -->
+  <div class="card mb-4"><div class="card-body">
+    <h5><span class="color-box" style="background:#ffcc00"></span> 1. Primzahl <var>p</var> & Generator <var>g</var> wählen</h5>
+    <div class="row g-2">
+      <div class="col-md-4">
+        <label class="form-label" for="primeInput">Primzahl p</label>
+        <input id="primeInput" type="number" class="form-control" placeholder="z. B. 23" value="23">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="generatorInput">Generator g</label>
+        <input id="generatorInput" type="number" class="form-control" placeholder="z. B. 5" value="5">
+      </div>
+      <div class="col-md-4 d-grid">
+        <label class="form-label invisible"> </label>
+        <button id="setParamsBtn" class="btn btn-primary">Parameter übernehmen</button>
       </div>
     </div>
-    <div class="col-sm-3">
-      <div id="mallory" class="card party-card border-danger">
-        <div class="card-body">
-          <h4 class="card-title text-danger">Mallory (MITM)</h4>
-          <p class="card-text secret"><span class="label">m</span> = ?</p>
-        </div>
+    <div id="paramsResult" class="mt-2 text-success small"></div>
+  </div></div>
+
+  <!-- Schritt 2 -->
+  <div class="card mb-4 hidden" id="step2"><div class="card-body">
+    <h5>
+      <span class="color-box" style="background:#0000ff"></span>
+      <span class="color-box" style="background:#ff0000"></span>
+      2. Geheime Exponenten <var>a</var> (Alice) & <var>b</var> (Bob)
+    </h5>
+    <div class="row">
+      <div class="col-md-6 border-end">
+        <label class="form-label" for="aliceSecret">Alice geheim a</label>
+        <input id="aliceSecret" type="number" class="form-control mb-2" value="6">
+        <button id="pubAliceBtn" class="btn btn-outline-dark">A berechnen</button>
+        <p class="mt-2">A = g<sup>a</sup> mod p → <strong id="alicePublic">---</strong></p>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="bobSecret">Bob geheim b</label>
+        <input id="bobSecret" type="number" class="form-control mb-2" value="15">
+        <button id="pubBobBtn" class="btn btn-outline-dark">B berechnen</button>
+        <p class="mt-2">B = g<sup>b</sup> mod p → <strong id="bobPublic">---</strong></p>
       </div>
     </div>
-    <div class="col-sm-3">
-      <div id="bob" class="card party-card border-success">
-        <div class="card-body">
-          <h4 class="card-title text-success">Bob</h4>
-          <p class="card-text secret"><span class="label">b</span> = ?</p>
-        </div>
-      </div>
+  </div></div>
+
+  <!-- Schritt 3 -->
+  <div class="card mb-4 hidden" id="step3"><div class="card-body">
+    <h5>🎨 3. Öffentliche Werte austauschen</h5>
+    <p>Alice sendet <strong id="sendA">---</strong> an Bob &nbsp;|&nbsp; Bob sendet <strong id="sendB">---</strong> an Alice</p>
+    <button id="deriveBtn" class="btn btn-success">🔐 Gemeinsamen Schlüssel berechnen</button>
+  </div></div>
+
+  <!-- Schritt 4 -->
+  <div class="card mb-4 hidden" id="step4"><div class="card-body">
+    <h5>🔐 4. Gemeinsamer Schlüssel <var>S</var></h5>
+    <p class="small">S = B<sup>a</sup> mod p = A<sup>b</sup> mod p</p>
+    <div class="row">
+      <div class="col-md-6 border-end">Alice → <strong id="aliceShared">---</strong></div>
+      <div class="col-md-6">Bob → <strong id="bobShared">---</strong></div>
     </div>
-  </div>
+    <p id="matchMsg" class="fw-bold mt-3"></p>
+  </div></div>
 
-  <div class="arrow-area my-4">
-    <svg id="lineLayer" width="100%" height="100%">
-      <defs>
-        <marker id="arrow-legit" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
-          <polygon points="0 0, 10 3.5, 0 7" fill="var(--color-legit)" />
-        </marker>
-        <marker id="arrow-attacker" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
-          <polygon points="0 0, 10 3.5, 0 7" fill="var(--color-attacker)" />
-        </marker>
-        <marker id="arrow-neutral" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
-          <polygon points="0 0, 10 3.5, 0 7" fill="var(--color-neutral)" />
-        </marker>
-      </defs>
-    </svg>
-  </div>
+  <p class="text-center mt-5">
+    <a href="/colors" class="btn btn-link">← Zur visuellen Farb‑Demo</a>
+  </p>
 
-  <div class="progress mb-3"><div id="progressBar" class="progress-bar bg-primary" style="width:0%"></div></div>
-  <div id="explanation" class="rounded mb-4"></div>
+</div>
 
-  <div class="d-flex flex-wrap gap-2 justify-content-center mb-4 align-items-center">
-    <button id="prev" class="btn btn-outline-secondary btn-sm">◀ Zurück</button>
-    <button id="play" class="btn btn-primary btn-sm">► Play</button>
-    <button id="pause" class="btn btn-outline-primary btn-sm">❚❚ Pause</button>
-    <button id="next" class="btn btn-outline-secondary btn-sm">Weiter ▶</button>
-    <button id="reset" class="btn btn-danger btn-sm">⟲ Reset</button>
-    <label class="ms-3 mb-0 small">Geschwindigkeit</label>
-    <input type="range" id="speedSlider" class="form-range mx-2" min="500" max="5000" step="100" value="2500" style="width:150px">
-    <div class="form-check form-switch ms-3">
-      <input id="mitmToggle" class="form-check-input" type="checkbox" checked>
-      <label class="form-check-label" for="mitmToggle">MITM aktiv</label>
-    </div>
-  </div>
+<script>
+async function postJSON(url, data){
+  const res = await fetch(url, {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(data)
+  });
+  return res.json();
+}
 
-  <script>
-    const qs = s => document.querySelector(s);
-    const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-    const modPow = (b, e, m) => {
-      let r = 1n, base = BigInt(b) % BigInt(m), exp = BigInt(e), mod = BigInt(m);
-      while (exp > 0n) {
-        if (exp & 1n) r = (r * base) % mod;
-        exp >>= 1n;
-        base = (base * base) % mod;
-      }
-      return r;
-    };
+// Schritt 1
+let p, g;
+setParamsBtn.onclick = async () => {
+  const data = await postJSON("/set_params", {
+    prime: primeInput.value,
+    generator: generatorInput.value
+  });
+  if (data.p){
+    p = data.p; g = data.g;
+    paramsResult.textContent = `p = ${p}, g = ${g} gespeichert ✔`;
+    paramsResult.classList.remove("text-danger");
+    step2.classList.remove("hidden");
+  } else {
+    paramsResult.textContent = data.error || "Fehler";
+    paramsResult.classList.add("text-danger");
+  }
+};
 
-    let P = 23, G = 5;
-    const parties = { alice: {}, bob: {}, mallory: {} };
+// Schritt 2
+let a, b, A, B;
+pubAliceBtn.onclick = async () => {
+  a = +aliceSecret.value;
+  const r = await postJSON("/public_key", {prime:p, generator:g, secret:a});
+  A = r.public; alicePublic.textContent = A;
+  revealStep3();
+};
+pubBobBtn.onclick = async () => {
+  b = +bobSecret.value;
+  const r = await postJSON("/public_key", {prime:p, generator:g, secret:b});
+  B = r.public; bobPublic.textContent = B;
+  revealStep3();
+};
+function revealStep3(){
+  if (A !== undefined && B !== undefined){
+    sendA.textContent = A;
+    sendB.textContent = B;
+    step3.classList.remove("hidden");
+  }
+}
 
-    const arrowArea = qs('.arrow-area');
-    const svg = qs('#lineLayer');
-    const coords = el => { const r = el.getBoundingClientRect(); return { x: r.left + r.width/2 + window.scrollX, y: r.top + r.height + window.scrollY }; };
-    const rel = (x, y) => { const r = arrowArea.getBoundingClientRect(); return { x: x - r.left - window.scrollX, y: y - r.top - window.scrollY }; };
-
-    function drawArrow(from, to, markerId) {
-      const c1 = coords(qs('#'+from)), c2 = coords(qs('#'+to));
-      const p1 = rel(c1.x, c1.y), p2 = rel(c2.x, c2.y);
-      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-      line.setAttribute('x1', p1.x); line.setAttribute('y1', p1.y);
-      line.setAttribute('x2', p2.x); line.setAttribute('y2', p2.y);
-      line.setAttribute('stroke-width','2');
-      line.setAttribute('marker-end', `url(#${markerId})`);
-      svg.appendChild(line);
-      return line;
-    }
-    function addLabel(from, to, text) {
-      const label = document.createElement('div');
-      label.className = 'static-label';
-      label.textContent = text;
-      arrowArea.appendChild(label);
-      positionLabels();
-    }
-    function positionLabels() {
-      arrowArea.querySelectorAll('.static-label').forEach(lbl => {
-        const [from, to, text] = [lbl.dataset.from, lbl.dataset.to];
-      });
-    }
-    function animateSend(from, to, text, markerId, callback) {
-      const start = coords(qs('#'+from)), end = coords(qs('#'+to));
-      const msg = document.createElement('div');
-      msg.className = 'message';
-      msg.style.background = getComputedStyle(document.documentElement).getPropertyValue(`--color-${markerId.split('-')[1]}`);
-      msg.textContent = text;
-      arrowArea.appendChild(msg);
-      gsap.set(msg, { x: start.x, y: start.y, opacity: 0 });
-      gsap.to(msg, { x: end.x, y: end.y, opacity: 1, duration: 1, onComplete: () => { msg.remove(); drawArrow(from,to,markerId); addStatic(from,to,text,markerId); if(callback) callback(); } });
-    }
-    function setSecret(id, label, val) { qs('#'+id+' .secret').innerHTML = `<span class=\"label\">${label}</span> = ${val}`; }
-    function showKey(id, key) { qs('#'+id+' .secret').insertAdjacentHTML('beforeend', `<br><span class=\"text-muted small\">K = ${key}</span>`); }
-    function clearAll() { svg.innerHTML = svg.innerHTML.split('<defs>')[0] + svg.innerHTML.slice(svg.innerHTML.indexOf('<defs>')); arrowArea.querySelectorAll('.static-label').forEach(e=>e.remove()); }
-
-    const steps = [
-      { desc: () => `Basis: p=${P}, g=${G}`, run: () => drawArrow('alice','bob','arrow-neutral') },
-      { desc: 'Geheime Exponenten wählen', run: () => { parties.alice.secret=randInt(2,P-2); parties.bob.secret=randInt(2,P-2); parties.mallory.secret=randInt(2,P-2); setSecret('alice','a',parties.alice.secret); setSecret('bob','b',parties.bob.secret); setSecret('mallory','m',parties.mallory.secret);} },
-      { desc: 'Öffentliche Schlüssel austauschen', run: () => { const A=Number(modPow(G,parties.alice.secret,P)); const B=Number(modPow(G,parties.bob.secret,P)); const M=Number(modPow(G,parties.mallory.secret,P)); if(qs('#mitmToggle').checked) { animateSend('alice','mallory',`A=${A}`,'arrow-legit',()=>{}); animateSend('mallory','bob',`A*=${M}`,'arrow-attacker',()=>{}); animateSend('bob','mallory',`B=${B}`,'arrow-legit',()=>{}); animateSend('mallory','alice',`B*=${M}`,'arrow-attacker',()=>{}); } else { animateSend('alice','bob',`A=${A}`,'arrow-legit',()=>{}); animateSend('bob','alice',`B=${B}`,'arrow-legit',()=>{}); } } },
-      { desc: 'Gemeinsamen Schlüssel berechnen', run: () => { const mitm=qs('#mitmToggle').checked; const A=mitm?Number(modPow(parties.mallory.secret,P,P)):null; /* simplified */ } },
-    ];
-
-    // For brevity: Additional implementation omitted. Ensure full functionality.
-  </script>
+// Schritt 3 + 4
+deriveBtn.onclick = async () => {
+  const rA = await postJSON("/shared_secret", {prime:p, secret:a, received_public:B});
+  const rB = await postJSON("/shared_secret", {prime:p, secret:b, received_public:A});
+  const sA = rA.shared, sB = rB.shared;
+  aliceShared.textContent = sA;
+  bobShared.textContent   = sB;
+  matchMsg.textContent = sA === sB ? "✅ Beide haben denselben Schlüssel!" : "❌ Schlüssel stimmen nicht überein!";
+  matchMsg.className = (sA === sB ? "match" : "mismatch") + " p-2 rounded";
+  step4.classList.remove("hidden");
+};
+</script>
 </body>
 </html>
