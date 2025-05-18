@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Diffie‑Hellman mit Zahlen</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .hidden{display:none}
+    .match{background:#d4edda;border:1px solid #28a745}
+    .mismatch{background:#f8d7da;border:1px solid #dc3545}
+    .color-box{display:inline-block;width:22px;height:22px;border:1px solid #333;border-radius:4px;margin:0 6px -5px 6px}
+    html{scroll-behavior:smooth;}
+  </style>
+</head>
+<body class="bg-light">
+<div class="container py-5">
+  <h2 class="text-center mb-4">🔢 Diffie‑Hellman mit Zahlen</h2>
+
+  <div class="alert alert-info small mb-4">
+    <strong>Farb‑Analogie:</strong>
+    <span class="color-box" style="background:#ffcc00"></span> <code>p, g</code> (Basis) &nbsp;•&nbsp;
+    <span class="color-box" style="background:#0000ff"></span> <code>a</code> (Alice geheim) &nbsp;•&nbsp;
+    <span class="color-box" style="background:#ff0000"></span> <code>b</code> (Bob geheim) &nbsp;→&nbsp;
+    <span class="color-box" style="background:#7f7f00"></span> <code>A, B</code> (öffentlich) &nbsp;→&nbsp;
+    <span class="color-box" style="background:#5c5c5c"></span> <code>S</code> (gemeinsamer Schlüssel)
+    <a class="ms-2" href="/colors">Farb‑Demo öffnen</a>
+  </div>
+
+  <!-- Schritt 1 -->
+  <div class="card mb-4"><div class="card-body">
+    <h5><span class="color-box" style="background:#ffcc00"></span> 1. Primzahl <var>p</var> & Generator <var>g</var> wählen</h5>
+    <div class="row g-2">
+      <div class="col-md-4">
+        <label class="form-label" for="primeInput">Primzahl p</label>
+        <input id="primeInput" type="number" class="form-control" placeholder="z. B. 23" value="23">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="generatorInput">Generator g</label>
+        <input id="generatorInput" type="number" class="form-control" placeholder="z. B. 5" value="5">
+      </div>
+      <div class="col-md-4 d-grid">
+        <label class="form-label invisible"> </label>
+        <button id="setParamsBtn" class="btn btn-primary">Parameter übernehmen</button>
+      </div>
+    </div>
+    <div id="paramsResult" class="mt-2 text-success small"></div>
+  </div></div>
+
+  <!-- Schritt 2 -->
+  <div class="card mb-4 hidden" id="step2"><div class="card-body">
+    <h5>
+      <span class="color-box" style="background:#0000ff"></span>
+      <span class="color-box" style="background:#ff0000"></span>
+      2. Geheime Exponenten <var>a</var> (Alice) & <var>b</var> (Bob)
+    </h5>
+    <div class="row">
+      <div class="col-md-6 border-end">
+        <label class="form-label" for="aliceSecret">Alice geheim a</label>
+        <input id="aliceSecret" type="number" class="form-control mb-2" value="6">
+        <button id="pubAliceBtn" class="btn btn-outline-dark">A berechnen</button>
+        <p class="mt-2">A = g<sup>a</sup> mod p → <strong id="alicePublic">---</strong></p>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" for="bobSecret">Bob geheim b</label>
+        <input id="bobSecret" type="number" class="form-control mb-2" value="15">
+        <button id="pubBobBtn" class="btn btn-outline-dark">B berechnen</button>
+        <p class="mt-2">B = g<sup>b</sup> mod p → <strong id="bobPublic">---</strong></p>
+      </div>
+    </div>
+  </div></div>
+
+  <!-- Schritt 3 -->
+  <div class="card mb-4 hidden" id="step3"><div class="card-body">
+    <h5>🎨 3. Öffentliche Werte austauschen</h5>
+    <p>Alice sendet <strong id="sendA">---</strong> an Bob &nbsp;|&nbsp; Bob sendet <strong id="sendB">---</strong> an Alice</p>
+    <button id="deriveBtn" class="btn btn-success">🔐 Gemeinsamen Schlüssel berechnen</button>
+  </div></div>
+
+  <!-- Schritt 4 -->
+  <div class="card mb-4 hidden" id="step4"><div class="card-body">
+    <h5>🔐 4. Gemeinsamer Schlüssel <var>S</var></h5>
+    <p class="small">S = B<sup>a</sup> mod p = A<sup>b</sup> mod p</p>
+    <div class="row">
+      <div class="col-md-6 border-end">Alice → <strong id="aliceShared">---</strong></div>
+      <div class="col-md-6">Bob → <strong id="bobShared">---</strong></div>
+    </div>
+    <p id="matchMsg" class="fw-bold mt-3"></p>
+  </div></div>
+
+  <p class="text-center mt-5">
+    <a href="/colors" class="btn btn-link">← Zur visuellen Farb‑Demo</a>
+  </p>
+
+</div>
+
+<script>
+async function postJSON(url, data){
+  const res = await fetch(url, {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(data)
+  });
+  return res.json();
+}
+
+// Schritt 1
+let p, g;
+setParamsBtn.onclick = async () => {
+  const data = await postJSON("/set_params", {
+    prime: primeInput.value,
+    generator: generatorInput.value
+  });
+  if (data.p){
+    p = data.p; g = data.g;
+    paramsResult.textContent = `p = ${p}, g = ${g} gespeichert ✔`;
+    paramsResult.classList.remove("text-danger");
+    step2.classList.remove("hidden");
+  } else {
+    paramsResult.textContent = data.error || "Fehler";
+    paramsResult.classList.add("text-danger");
+  }
+};
+
+// Schritt 2
+let a, b, A, B;
+pubAliceBtn.onclick = async () => {
+  a = +aliceSecret.value;
+  const r = await postJSON("/public_key", {prime:p, generator:g, secret:a});
+  A = r.public; alicePublic.textContent = A;
+  revealStep3();
+};
+pubBobBtn.onclick = async () => {
+  b = +bobSecret.value;
+  const r = await postJSON("/public_key", {prime:p, generator:g, secret:b});
+  B = r.public; bobPublic.textContent = B;
+  revealStep3();
+};
+function revealStep3(){
+  if (A !== undefined && B !== undefined){
+    sendA.textContent = A;
+    sendB.textContent = B;
+    step3.classList.remove("hidden");
+  }
+}
+
+// Schritt 3 + 4
+deriveBtn.onclick = async () => {
+  const rA = await postJSON("/shared_secret", {prime:p, secret:a, received_public:B});
+  const rB = await postJSON("/shared_secret", {prime:p, secret:b, received_public:A});
+  const sA = rA.shared, sB = rB.shared;
+  aliceShared.textContent = sA;
+  bobShared.textContent   = sB;
+  matchMsg.textContent = sA === sB ? "✅ Beide haben denselben Schlüssel!" : "❌ Schlüssel stimmen nicht überein!";
+  matchMsg.className = (sA === sB ? "match" : "mismatch") + " p-2 rounded";
+  step4.classList.remove("hidden");
+};
+</script>
+</body>
+</html>
