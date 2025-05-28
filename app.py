@@ -1,52 +1,45 @@
-from flask import Flask, render_template, request, jsonify
+from flask import (
+    Flask, render_template, request, jsonify,
+    send_from_directory
+)
+from werkzeug.exceptions import HTTPException
 import re
 import math
+import os
 import logging
 
 app = Flask(__name__)
 
 # ---------------------------------------------------------------------------
-# Logging Setup (useful in production)
+# Logging
 # ---------------------------------------------------------------------------
 logging.basicConfig(level=logging.INFO)
 
 # ---------------------------------------------------------------------------
-# Constants
+# Konstanten
 # ---------------------------------------------------------------------------
-MAX_SAFE_PRIME = 10**6
-
-# ---------------------------------------------------------------------------
-# Utility Functions – Colors
-# ---------------------------------------------------------------------------
-def hex_to_rgb(hex_color):
-    hex_color = hex_color.lstrip('#')
-    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-
-def rgb_to_hex(rgb_tuple):
-    return '#%02x%02x%02x' % rgb_tuple
-
-def mix_colors(hex1, hex2):
-    try:
-        rgb1 = hex_to_rgb(hex1)
-        rgb2 = hex_to_rgb(hex2)
-        mixed_rgb = tuple((a + b) // 2 for a, b in zip(rgb1, rgb2))
-        return rgb_to_hex(mixed_rgb)
-    except Exception:
-        raise ValueError("Color mixing failed.")
-
-def mix_three_colors(hex1, hex2, hex3):
-    try:
-        rgb1, rgb2, rgb3 = map(hex_to_rgb, (hex1, hex2, hex3))
-        mixed_rgb = tuple((a + b + c) // 3 for a, b, c in zip(rgb1, rgb2, rgb3))
-        return rgb_to_hex(mixed_rgb)
-    except Exception:
-        raise ValueError("Color mixing failed.")
-
-def validate_hex(hex_code):
-    return bool(re.fullmatch(r"#[0-9a-fA-F]{6}", hex_code))
+MAX_SAFE_PRIME = 10 ** 6       # Obergrenze für Demo-Parametrisierung
 
 # ---------------------------------------------------------------------------
-# Utility Functions – Numeric
+# Hilfsfunktionen – Farbmischung
+# ---------------------------------------------------------------------------
+def hex_to_rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+def rgb_to_hex(rgb):
+    return "#%02x%02x%02x" % rgb
+
+def mix_colors(a, b):
+    r1, g1, b1 = hex_to_rgb(a)
+    r2, g2, b2 = hex_to_rgb(b)
+    return rgb_to_hex(((r1+r2)//2, (g1+g2)//2, (b1+b2)//2))
+
+def validate_hex(code):
+    return bool(re.fullmatch(r"#[0-9a-fA-F]{6}", code))
+
+# ---------------------------------------------------------------------------
+# Hilfsfunktionen – Zahlen
 # ---------------------------------------------------------------------------
 def is_prime(n: int) -> bool:
     if n < 2:
@@ -55,25 +48,40 @@ def is_prime(n: int) -> bool:
         return True
     if n % 2 == 0:
         return False
-    r = int(math.isqrt(n)) + 1
-    return all(n % i for i in range(3, r, 2))
+    root = int(math.isqrt(n)) + 1
+    return all(n % i for i in range(3, root, 2))
 
-def validate_int(x: str) -> bool:
-    return bool(re.fullmatch(r"\d+", str(x)))
+def validate_int(s: str) -> bool:
+    return bool(re.fullmatch(r"\d+", str(s)))
 
-def modexp(base: int, exp: int, mod: int) -> int:
-    return pow(base, exp, mod)
+def _require_positive_int(val, name):
+    if not validate_int(val) or int(val) <= 0:
+        raise ValueError(f"{name} muss eine positive ganze Zahl sein.")
+    return int(val)
 
 # ---------------------------------------------------------------------------
-# Error Handlers
+# Error-Handler
 # ---------------------------------------------------------------------------
 @app.errorhandler(Exception)
 def handle_exception(e):
-    app.logger.error(f"Unhandled exception: {e}", exc_info=True)
+    if isinstance(e, HTTPException):
+        return e                              # 404, 405 … unverändert
+    app.logger.error("Unhandled exception", exc_info=True)
     return jsonify({"error": "Internal server error"}), 500
 
 # ---------------------------------------------------------------------------
-# UI Routes
+# Favicon (optional)
+# ---------------------------------------------------------------------------
+@app.route("/favicon.ico")
+def favicon():
+    return send_from_directory(
+        os.path.join(app.root_path, "static"),
+        "favicon.ico",
+        mimetype="image/vnd.microsoft.icon"
+    )
+
+# ---------------------------------------------------------------------------
+# UI-Routen
 # ---------------------------------------------------------------------------
 @app.route("/")
 def landing():
@@ -87,107 +95,113 @@ def colors():
 def numeric():
     return render_template("numeric.html")
 
+@app.route("/discrete")
+def discrete_math():
+    return render_template("discrete_math.html")
+
 # ---------------------------------------------------------------------------
-# API – Colors
+# API – Farben
 # ---------------------------------------------------------------------------
 @app.route("/set_base", methods=["POST"])
 def set_base():
-    try:
-        data = request.get_json()
-        color = data.get("baseColor", "")
-        if not validate_hex(color):
-            return jsonify({"error": "Invalid base color"}), 400
-        return jsonify({"status": "ok", "confirmedColor": color})
-    except Exception as e:
-        return jsonify({"error": f"Invalid input: {e}"}), 400
+    data = request.get_json(force=True)
+    color = data.get("baseColor", "")
+    if not validate_hex(color):
+        return jsonify({"error": "Invalid base color"}), 400
+    return jsonify({"status": "ok", "confirmedColor": color})
 
 @app.route("/mix", methods=["POST"])
 def mix():
-    try:
-        data = request.get_json()
-        color1 = data.get("color1", "")
-        color2 = data.get("color2", "")
-
-        if not (validate_hex(color1) and validate_hex(color2)):
-            return jsonify({"error": "Invalid HEX colors."}), 400
-
-        mixed = mix_colors(color1, color2)
-        return jsonify({"mixedColor": mixed, "components": [color1, color2]})
-    except Exception as e:
-        return jsonify({"error": f"Mixing failed: {e}"}), 400
+    data = request.get_json(force=True)
+    c1, c2 = data.get("color1", ""), data.get("color2", "")
+    if not (validate_hex(c1) and validate_hex(c2)):
+        return jsonify({"error": "Invalid HEX colors."}), 400
+    return jsonify({"mixedColor": mix_colors(c1, c2), "components": [c1, c2]})
 
 @app.route("/final", methods=["POST"])
 def final_mix():
-    try:
-        data = request.get_json()
-        base = data.get("baseColor", "")
-        alice = data.get("aliceSecret", "")
-        bob = data.get("bobSecret", "")
-
-        if not all(map(validate_hex, [base, alice, bob])):
-            return jsonify({"error": "Invalid HEX colors."}), 400
-
-        inner_mix = mix_colors(alice, bob)
-        result = mix_colors(base, inner_mix)
-
-        return jsonify({
-            "finalColor": result,
-            "components": [base, alice, bob],
-            "intermediate": inner_mix
-        })
-    except Exception as e:
-        return jsonify({"error": f"Mixing failed: {e}"}), 400
+    data = request.get_json(force=True)
+    base = data.get("baseColor", "")
+    alice = data.get("aliceSecret", "")
+    bob = data.get("bobSecret", "")
+    if not all(map(validate_hex, (base, alice, bob))):
+        return jsonify({"error": "Invalid HEX colors."}), 400
+    inner = mix_colors(alice, bob)
+    return jsonify({
+        "finalColor": mix_colors(base, inner),
+        "components": [base, alice, bob],
+        "intermediate": inner
+    })
 
 # ---------------------------------------------------------------------------
-# API – Numeric
+# API – Diffie-Hellman (Zahlen-Modus)
 # ---------------------------------------------------------------------------
 @app.route("/set_params", methods=["POST"])
 def set_params():
-    try:
-        data = request.get_json()
-        p_raw, g_raw = data.get("prime"), data.get("generator")
-
-        if not (validate_int(p_raw) and validate_int(g_raw)):
-            return jsonify({"error": "Ungültige Zahlen."}), 400
-
-        p, g = int(p_raw), int(g_raw)
-        if p > MAX_SAFE_PRIME:
-            return jsonify({"error": "Zahl zu groß."}), 400
-        if not is_prime(p) or not (1 < g < p):
-            return jsonify({"error": "p muss prim sein und 1 < g < p."}), 400
-
-        return jsonify({"status": "ok", "p": p, "g": g})
-    except Exception as e:
-        return jsonify({"error": f"Fehlerhafte Eingabe: {e}"}), 400
+    data = request.get_json(force=True)
+    p = _require_positive_int(data.get("prime"),      "p")
+    g = _require_positive_int(data.get("generator"),  "g")
+    if p > MAX_SAFE_PRIME:
+        return jsonify({"error": "Zahl zu groß."}), 400
+    if not is_prime(p) or not (1 < g < p):
+        return jsonify({"error": "p muss prim sein und 1 < g < p."}), 400
+    return jsonify({"status": "ok", "p": p, "g": g})
 
 @app.route("/public_key", methods=["POST"])
 def public_key():
-    try:
-        data = request.get_json()
-        p = int(data.get("prime"))
-        g = int(data.get("generator"))
-        secret = int(data.get("secret"))
-        public_val = modexp(g, secret, p)
-        return jsonify({"public": public_val})
-    except (TypeError, ValueError, KeyError) as e:
-        return jsonify({"error": f"Invalid input: {e}"}), 400
+    data = request.get_json(force=True)
+    p = _require_positive_int(data.get("prime"),     "p")
+    g = _require_positive_int(data.get("generator"), "g")
+    s = _require_positive_int(data.get("secret"),    "secret")
+    return jsonify({"public": pow(g, s, p)})
 
 @app.route("/shared_secret", methods=["POST"])
 def shared_secret():
-    try:
-        data = request.get_json()
-        p = int(data.get("prime"))
-        secret = int(data.get("secret"))
-        received_pk = int(data.get("received_public"))
-        shared = modexp(received_pk, secret, p)
-        return jsonify({"shared": shared})
-    except (TypeError, ValueError, KeyError) as e:
-        return jsonify({"error": f"Invalid input: {e}"}), 400
+    data = request.get_json(force=True)
+    p = _require_positive_int(data.get("prime"),         "p")
+    s = _require_positive_int(data.get("secret"),        "secret")
+    pk = _require_positive_int(data.get("received_public"), "received_public")
+    return jsonify({"shared": pow(pk, s, p)})
 
 # ---------------------------------------------------------------------------
-# Main Entry
+# API – Diskrete Exponentialfunktion
+# ---------------------------------------------------------------------------
+@app.route("/api/discrete_exp", methods=["POST"])
+def discrete_exponentiation():
+    try:
+        data = request.get_json(force=True)
+        base = _require_positive_int(data.get("base"), "Basis")
+        exp  = _require_positive_int(data.get("exp"),  "Exponent")
+        mod  = _require_positive_int(data.get("mod"),  "Modul")
+        if mod == 1:
+            return jsonify({"result": 0})
+        return jsonify({"result": pow(base, exp, mod)})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+# ---------------------------------------------------------------------------
+# API – Diskreter Logarithmus (Brute-Force-Demo)
+# ---------------------------------------------------------------------------
+@app.route("/api/discrete_log", methods=["POST"])
+def discrete_logarithm():
+    try:
+        data = request.get_json(force=True)
+        base = _require_positive_int(data.get("base"),   "Basis")
+        res  = _require_positive_int(data.get("result"), "Ergebnis")
+        mod  = _require_positive_int(data.get("mod"),    "Modul")
+        if mod > 10_000:
+            return jsonify({"error": "Bitte ein kleineres p wählen (<10 000) "
+                                     "für die Demonstration."}), 400
+        for x in range(mod):
+            if pow(base, x, mod) == res:
+                return jsonify({"log": x})
+        return jsonify({"error": "Kein Exponent x gefunden."}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+# ---------------------------------------------------------------------------
+# Main
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    import os
     debug_mode = os.getenv("FLASK_DEBUG", "false").lower() == "true"
     app.run(debug=debug_mode)
